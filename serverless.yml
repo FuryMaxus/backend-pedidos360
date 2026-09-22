@@ -1,0 +1,34 @@
+service: backend-pedidos360
+frameworkVersion: '4'
+
+provider:
+  name: aws
+  runtime: python3.13
+  region: us-east-1
+  role: arn:aws:iam::362471493855:role/LabRole
+
+
+custom:
+  pythonRequirements:
+    dockerizePip: false
+
+functions:
+  pedidos:
+    handler: src.pedidos.app.handler
+    events:
+      - http:
+          path: /pedidos
+          method: ANY
+      - http:
+          path: /pedidos/{proxy+}
+          method: ANY
+
+  encargos:
+    handler: src.encargos.app.handler
+    events:
+      - http:
+          path: /encargos
+          method: ANY
+      - http:
+          path: /encargos/{proxy+}
+          method: ANY
