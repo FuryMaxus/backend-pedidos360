@@ -1,34 +1,79 @@
 service: backend-pedidos360
-frameworkVersion: '4'
 
 provider:
   name: aws
   runtime: python3.13
   region: us-east-1
-  role: arn:aws:iam::362471493855:role/LabRole
-
-
-custom:
-  pythonRequirements:
-    dockerizePip: false
+  role: arn:aws:iam::362471493855:role/LabRole 
+  environment:
+    TABLA_PEDIDOS: pedidos-tabla-dev
+    TABLA_CATALOGO: catalogo-tabla-dev
+    ESTADOS_PERMITIDOS: "CREADO,ACEPTADO,EN_PREPARACION,DESPACHADO,ENTREGADO,CANCELADO"
 
 functions:
-  pedidos:
-    handler: src.pedidos.app.handler
+  crearPedido:
+    handler: src.pedidos.crear_pedido
     events:
       - http:
-          path: /pedidos
-          method: ANY
-      - http:
-          path: /pedidos/{proxy+}
-          method: ANY
+          path: /api/orders
+          method: post
 
-  encargos:
-    handler: src.encargos.app.handler
+  obtenerPedido:
+    handler: src.pedidos.obtener_pedido
     events:
       - http:
-          path: /encargos
-          method: ANY
+          path: /api/orders/{id}
+          method: get
+
+  actualizarEstadoPedido:
+    handler: src.pedidos.actualizar_estado
+    events:
       - http:
-          path: /encargos/{proxy+}
-          method: ANY
+          path: /api/orders/{id}/estado
+          method: patch
+  crearProducto:
+    handler: src.catalogo.crear_producto
+    events:
+      - http:
+          path: /api/catalog
+          method: post
+
+  listarProductos:
+    handler: src.catalogo.listar_productos
+    events:
+      - http:
+          path: /api/catalog
+          method: get
+
+  actualizarStockProducto:
+    handler: src.catalogo.actualizar_stock
+    events:
+      - http:
+          path: /api/catalog/{id}/stock
+          method: patch
+
+resources:
+  Resources:
+    TablaPedidosDynamo:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: pedidos-tabla-dev
+        AttributeDefinitions:
+          - AttributeName: id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: id
+            KeyType: HASH
+        BillingMode: PAY_PER_REQUEST #
+
+    TablaCatalogoDynamo:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: catalogo-tabla-dev
+        AttributeDefinitions:
+          - AttributeName: id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: id
+            KeyType: HASH
+        BillingMode: PAY_PER_REQUEST
