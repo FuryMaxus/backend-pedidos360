@@ -17,6 +17,7 @@ functions:
       - http:
           path: /api/orders
           method: post
+          cors: true
 
   obtenerPedido:
     handler: src.pedidos.obtener_pedido
@@ -24,6 +25,7 @@ functions:
       - http:
           path: /api/orders/{id}
           method: get
+          cors: true
 
   actualizarEstadoPedido:
     handler: src.pedidos.actualizar_estado
@@ -31,12 +33,14 @@ functions:
       - http:
           path: /api/orders/{id}/estado
           method: patch
+          cors: true
   crearProducto:
     handler: src.catalogo.crear_producto
     events:
       - http:
           path: /api/catalog
           method: post
+          cors: true
 
   listarProductos:
     handler: src.catalogo.listar_productos
@@ -44,6 +48,7 @@ functions:
       - http:
           path: /api/catalog
           method: get
+          cors: true
 
   actualizarStockProducto:
     handler: src.catalogo.actualizar_stock
@@ -51,6 +56,7 @@ functions:
       - http:
           path: /api/catalog/{id}/stock
           method: patch
+          cors: true
 
 resources:
   Resources:
