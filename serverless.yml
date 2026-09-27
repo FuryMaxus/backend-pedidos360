@@ -9,6 +9,7 @@ provider:
     TABLA_PEDIDOS: pedidos-tabla-dev
     TABLA_CATALOGO: catalogo-tabla-dev
     ESTADOS_PERMITIDOS: "CREADO,ACEPTADO,EN_PREPARACION,DESPACHADO,ENTREGADO,CANCELADO"
+    TOPIC_ARN_SNS: arn:aws:sns:${aws:region}:${aws:accountId}:pedido-aceptado
 
 functions:
   crearPedido:
@@ -18,7 +19,6 @@ functions:
           path: /api/orders
           method: post
           cors: true
-
   obtenerPedido:
     handler: src.pedidos.obtener_pedido
     events:
@@ -26,7 +26,6 @@ functions:
           path: /api/orders/{id}
           method: get
           cors: true
-
   actualizarEstadoPedido:
     handler: src.pedidos.actualizar_estado
     events:
@@ -34,6 +33,7 @@ functions:
           path: /api/orders/{id}/estado
           method: patch
           cors: true
+
   crearProducto:
     handler: src.catalogo.crear_producto
     events:
@@ -41,7 +41,6 @@ functions:
           path: /api/catalog
           method: post
           cors: true
-
   listarProductos:
     handler: src.catalogo.listar_productos
     events:
@@ -49,7 +48,6 @@ functions:
           path: /api/catalog
           method: get
           cors: true
-
   actualizarStockProducto:
     handler: src.catalogo.actualizar_stock
     events:
@@ -57,6 +55,25 @@ functions:
           path: /api/catalog/{id}/stock
           method: patch
           cors: true
+  actualizarProducto:
+    handler: src.catalogo.actualizar_producto
+    events:
+      - http:
+          path: /api/catalog/{id}
+          method: patch
+          cors: true 
+  eliminarProducto:
+    handler: src.catalogo.eliminar_producto
+    events:
+      - http:
+          path: /api/catalog/{id}
+          method: delete
+          cors: true
+  
+  descontarStockEvento:
+    handler: src.catalogo.descontar_stock_evento
+    events:
+      - sns: pedido-aceptado
 
 resources:
   Resources:

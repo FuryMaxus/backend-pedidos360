@@ -30,7 +30,7 @@ def obtener_identidad(event):
     return roles, user_id
 
 def crear_producto(event, context):
-    roles, user_id = obtener_identidad(event)
+    roles, _ = obtener_identidad(event)
     
     if "Admin" not in roles and "Operador" not in roles:
         return {
@@ -63,7 +63,6 @@ def crear_producto(event, context):
     }
 
 def listar_productos(event, context):
-
     respuesta = tabla_catalogo.scan()
     productos = respuesta.get("Items", [])
     
@@ -74,7 +73,7 @@ def listar_productos(event, context):
         }
 
 def actualizar_stock(event, context):
-    roles, user_id = obtener_identidad(event)
+    roles, _ = obtener_identidad(event)
     if "Admin" not in roles and "Operador" not in roles:
         return {
             "statusCode": 403,
@@ -128,3 +127,105 @@ def actualizar_stock(event, context):
             "body": json.dumps({"error": "Error al actualizar stock"}),
             "headers": CORS_HEADERS
             }
+
+def actualizar_producto(event, context):
+    roles, _ = obtener_identidad(event)
+    
+    if "Admin" not in roles and "Operador" not in roles:
+        return {
+            "statusCode": 403,
+            "body": json.dumps({"error": "Acceso denegado"}),
+            "headers": CORS_HEADERS
+        }
+
+    producto_id = event.get("pathParameters", {}).get("id")
+    body = json.loads(event.get("body", "{}")) if event.get("body") else {}
+    
+    expresion_update = []
+    valores = {}
+    
+    if "nombre" in body:
+        expresion_update.append("nombre = :nombre")
+        valores[":nombre"] = body["nombre"]
+        
+    if "precio" in body:
+        expresion_update.append("precio = :precio")
+        valores[":precio"] = body["precio"]
+        
+    if not expresion_update:
+        return {
+            "statusCode": 400,
+            "body": json.dumps({"error": "No se enviaron valores para actualizar"}),
+            "headers": CORS_HEADERS
+        }
+
+    try:
+        respuesta = tabla_catalogo.update_item(
+            Key={"id": producto_id},
+            UpdateExpression="SET " + ", ".join(expresion_update),
+            ExpressionAttributeValues=valores,
+            ReturnValues="ALL_NEW" 
+        )
+        
+        producto_actualizado = respuesta.get("Attributes", {})
+        
+        return {
+            "statusCode": 200,
+            "body": json.dumps(producto_actualizado, cls=DecimalEncoder), 
+            "headers": CORS_HEADERS
+        }
+    except Exception as e:
+        print(f"Error al actualizar: {str(e)}")
+        return {
+            "statusCode": 500,
+            "body": json.dumps({"error": "Error interno del servidor"}),
+            "headers": CORS_HEADERS
+        }
+
+def eliminar_producto(event, context):
+    roles, _ = obtener_identidad(event)
+    
+    if "Admin" not in roles:
+        return {
+            "statusCode": 403,
+            "body": json.dumps({"error": "Acceso denegado"}),
+            "headers": CORS_HEADERS
+        }
+
+    producto_id = event.get("pathParameters", {}).get("id")
+
+    try:
+        tabla_catalogo.delete_item(
+            Key={"id": producto_id}
+        )
+        return {
+            "statusCode": 200,
+            "body": json.dumps({"mensaje": f"Producto {producto_id} eliminado exitosamente"}),
+            "headers": CORS_HEADERS
+        }
+    except Exception as e:
+        return {
+            "statusCode": 500,
+            "body": json.dumps({"error": "Error interno"}),
+            "headers": CORS_HEADERS
+        }
+
+def descontar_stock_evento(event, context):
+    """Esta función no tiene return HTTP porque no le responde a un navegador, le responde a AWS"""
+    try:
+        mensaje_sns = event['Records'][0]['Sns']['Message']
+        datos = json.loads(mensaje_sns)
+        items_vendidos = datos.get("items_vendidos", [])
+        
+        for item in items_vendidos:
+            producto_id = item.get("producto_id")
+            cantidad = item.get("cantidad")
+            tabla_catalogo.update_item(
+                Key={"id": producto_id},
+                UpdateExpression="ADD stock :val",
+                ExpressionAttributeValues={":val": -cantidad}
+            )
+            print(f"Stock descontado: -{cantidad} para el producto {producto_id}")
+            
+    except Exception as e:
+        print(f"Error procesando evento SNS: {str(e)}")

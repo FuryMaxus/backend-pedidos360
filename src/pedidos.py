@@ -7,6 +7,7 @@ from decimal import Decimal
 
 dynamodb = boto3.resource('dynamodb')
 tabla_pedidos = dynamodb.Table(os.environ.get('TABLA_PEDIDOS'))
+sns = boto3.client('sns')
 ESTADOS_VALIDOS = os.environ.get('ESTADOS_PERMITIDOS', '').split(',')
 CORS_HEADERS = {
     "Access-Control-Allow-Origin": "*",
@@ -99,7 +100,7 @@ def obtener_pedido(event, context):
 
 
 def actualizar_estado(event, context):
-    roles, user_id = obtener_identidad(event)
+    roles, _ = obtener_identidad(event)
     
     if "Operador" not in roles and "Admin" not in roles:
         return {
@@ -144,8 +145,36 @@ def actualizar_estado(event, context):
         UpdateExpression="SET estado = :nuevo_estado",
         ExpressionAttributeValues={":nuevo_estado": nuevo_estado}
     )
-    
-    pedido["estado"] = nuevo_estado
+
+    pedido["estado"] = nuevo_estado    
+
+    if nuevo_estado == "ACEPTADO":
+        try:
+            sns.publish(
+                TopicArn=os.environ['TOPIC_ARN_SNS'],
+                Message=json.dumps({
+                    "items_vendidos": pedido["items"] 
+                }, cls=DecimalEncoder)
+            )
+            print("Evento publicado en SNS exitosamente")
+            
+        except Exception as e:
+            print(f"Error crítico en SNS. Iniciando Rollback: {str(e)}")
+            
+            tabla_pedidos.update_item(
+                Key={"id": pedido_id},
+                UpdateExpression="SET estado = :estado",
+                ExpressionAttributeValues={":estado": "CANCELADO"}
+            )
+            
+            return {
+                "statusCode": 500,
+                "body": json.dumps({
+                    "error": "Error interno. El pedido fue Cancelado automáticamente porque no se pudo verificar el inventario."
+                }),
+                "headers": CORS_HEADERS
+            }
+
     return {
         "statusCode": 200,
         "body": json.dumps(pedido,cls=DecimalEncoder),
