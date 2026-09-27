@@ -8,7 +8,17 @@ from decimal import Decimal
 dynamodb = boto3.resource('dynamodb')
 tabla_pedidos = dynamodb.Table(os.environ.get('TABLA_PEDIDOS'))
 sns = boto3.client('sns')
+
 ESTADOS_VALIDOS = os.environ.get('ESTADOS_PERMITIDOS', '').split(',')
+TRANSICIONES_PERMITIDAS = {
+    "CREADO": ["ACEPTADO", "CANCELADO"],
+    "ACEPTADO": ["EN_PREPARACION", "CANCELADO"],
+    "EN_PREPARACION": ["DESPACHADO", "CANCELADO"],
+    "DESPACHADO": ["ENTREGADO"],
+    "ENTREGADO": [], 
+    "CANCELADO": []  
+}
+
 CORS_HEADERS = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Credentials": True,
@@ -133,12 +143,14 @@ def actualizar_estado(event, context):
         
     estado_actual = pedido.get("estado")
     
-    if nuevo_estado == "DESPACHADO" and estado_actual not in ["ACEPTADO"]:
+    if nuevo_estado not in TRANSICIONES_PERMITIDAS.get(estado_actual, []):
         return {
             "statusCode": 400,
-            "body": json.dumps({"error": "El pedido no puede ser despachado sin ser aceptado previamente."}),
+            "body": json.dumps({
+                "error": f"Transición no permitida. No se puede pasar de '{estado_actual}' a '{nuevo_estado}'."
+            }),
             "headers": CORS_HEADERS
-            }
+        }
     
     tabla_pedidos.update_item(
         Key={"id": pedido_id},
