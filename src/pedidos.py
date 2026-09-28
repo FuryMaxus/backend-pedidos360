@@ -7,6 +7,7 @@ from decimal import Decimal
 
 dynamodb = boto3.resource('dynamodb')
 tabla_pedidos = dynamodb.Table(os.environ.get('TABLA_PEDIDOS'))
+tabla_catalogo = dynamodb.Table(os.environ.get('TABLA_CATALOGO'))
 sns = boto3.client('sns')
 
 ESTADOS_VALIDOS = os.environ.get('ESTADOS_PERMITIDOS', '').split(',')
@@ -79,6 +80,47 @@ def crear_pedido(event, context):
         "headers": CORS_HEADERS
         }
 
+def listar_pedidos(event, context):
+    roles, user_id = obtener_identidad(event)
+    
+    if not roles or ("Cliente" not in roles and "Operador" not in roles and "Admin" not in roles):
+        return {
+            "statusCode": 403,
+            "body": json.dumps({"error": "Acceso denegado"}),
+            "headers": CORS_HEADERS
+        }
+
+    query_params = event.get("queryStringParameters") or {}
+    filtro_cliente = query_params.get("cliente_id")
+
+    if "Cliente" in roles and "Operador" not in roles and "Admin" not in roles:
+        filtro_cliente = user_id
+
+    try:
+        if filtro_cliente:
+            respuesta = tabla_pedidos.scan(
+                FilterExpression="cliente_id = :cliente_id",
+                ExpressionAttributeValues={":cliente_id": filtro_cliente}
+            )
+        else:
+            respuesta = tabla_pedidos.scan()
+            
+        pedidos = respuesta.get("Items", [])
+        
+        return {
+            "statusCode": 200,
+            "body": json.dumps(pedidos, cls=DecimalEncoder),
+            "headers": CORS_HEADERS
+        }
+        
+    except Exception as e:
+        print(f"Error al listar pedidos: {str(e)}")
+        return {
+            "statusCode": 500,
+            "body": json.dumps({"error": "Error interno al obtener los pedidos"}),
+            "headers": CORS_HEADERS
+        }
+
 def obtener_pedido(event, context):
     roles, user_id = obtener_identidad(event)
     path_params = event.get("pathParameters", {}) or {}
@@ -123,6 +165,18 @@ def actualizar_estado(event, context):
     pedido_id = path_params.get("id")
     body = json.loads(event.get("body", "{}")) if event.get("body") else {}
     nuevo_estado = body.get("estado")
+
+    respuesta = tabla_pedidos.get_item(Key={"id": pedido_id})
+    pedido = respuesta.get("Item")
+
+    if not pedido:
+        return {
+            "statusCode": 404,
+            "body": json.dumps({"error": "Pedido no encontrado"}),
+            "headers": CORS_HEADERS
+            }
+
+    estado_actual = pedido.get("estado")
     
     if nuevo_estado not in ESTADOS_VALIDOS:
         return {
@@ -131,18 +185,6 @@ def actualizar_estado(event, context):
             "headers": CORS_HEADERS
             }
         
-    respuesta = tabla_pedidos.get_item(Key={"id": pedido_id})
-    pedido = respuesta.get("Item")
-    
-    if not pedido:
-        return {
-            "statusCode": 404,
-            "body": json.dumps({"error": "Pedido no encontrado"}),
-            "headers": CORS_HEADERS
-            }
-        
-    estado_actual = pedido.get("estado")
-    
     if nuevo_estado not in TRANSICIONES_PERMITIDAS.get(estado_actual, []):
         return {
             "statusCode": 400,
@@ -151,6 +193,35 @@ def actualizar_estado(event, context):
             }),
             "headers": CORS_HEADERS
         }
+
+    if nuevo_estado == "ACEPTADO":
+        try:
+            for item in pedido.get("items", []):
+                prod_id = item.get("producto_id")
+                cantidad_requerida = item.get("cantidad")
+                resp_cat = tabla_catalogo.get_item(Key={"id": prod_id})
+                producto = resp_cat.get("Item")
+                
+                if not producto:
+                    return {
+                        "statusCode": 400,
+                        "body": json.dumps({"error": f"El producto {prod_id} no existe en el catálogo."}),
+                        "headers": CORS_HEADERS
+                    }
+                    
+                if int(producto.get("stock", 0)) < cantidad_requerida:
+                    return {
+                        "statusCode": 400,
+                        "body": json.dumps({"error": f"Stock insuficiente para la ID {prod_id}. Disponible: {producto.get('stock')}"}),
+                        "headers": CORS_HEADERS
+                    }
+        except Exception as e:
+            print(f"Error al verificar stock: {str(e)}")
+            return {
+                "statusCode": 500,
+                "body": json.dumps({"error": "Error interno verificando el inventario."}),
+                "headers": CORS_HEADERS
+            }
     
     tabla_pedidos.update_item(
         Key={"id": pedido_id},

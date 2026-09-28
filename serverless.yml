@@ -19,6 +19,13 @@ functions:
           path: /api/orders
           method: post
           cors: true
+  listarPedidos:
+    handler: src.pedidos.listar_pedidos
+    events:
+      - http:
+          path: /api/orders
+          method: get
+          cors: true
   obtenerPedido:
     handler: src.pedidos.obtener_pedido
     events:
@@ -87,7 +94,7 @@ resources:
         KeySchema:
           - AttributeName: id
             KeyType: HASH
-        BillingMode: PAY_PER_REQUEST #
+        BillingMode: PAY_PER_REQUEST 
 
     TablaCatalogoDynamo:
       Type: AWS::DynamoDB::Table
