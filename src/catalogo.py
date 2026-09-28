@@ -2,32 +2,11 @@ import json
 import uuid
 import os
 import boto3
-from decimal import Decimal
+from src.utils import CORS_HEADERS, DecimalEncoder, obtener_identidad
 
 dynamodb = boto3.resource('dynamodb')
 tabla_catalogo = dynamodb.Table(os.environ.get('TABLA_CATALOGO'))
 
-CORS_HEADERS = {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Credentials": True,
-}
-
-class DecimalEncoder(json.JSONEncoder):
-    def default(self, obj):
-        if isinstance(obj, Decimal):
-            return int(obj) if obj % 1 == 0 else float(obj)
-        return super(DecimalEncoder, self).default(obj)
-
-def obtener_identidad(event):
-    """Extrae los roles y el ID de usuario desde el JWT inyectado por API Gateway"""
-    claims = event.get("requestContext", {}).get("authorizer", {}).get("jwt", {}).get("claims", {})
-    roles = claims.get("roles", [])
-    user_id = claims.get("sub", "id_desconocido")
-    if not roles:
-        headers = event.get("headers", {})
-        roles = [headers.get("x-simular-rol", "")]
-        user_id = headers.get("x-simular-usuario", "anonimo")
-    return roles, user_id
 
 def crear_producto(event, context):
     roles, _ = obtener_identidad(event)
