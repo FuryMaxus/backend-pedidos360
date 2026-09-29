@@ -11,7 +11,7 @@ tabla_catalogo = dynamodb.Table(os.environ.get('TABLA_CATALOGO'))
 def crear_producto(event, context):
     roles, _ = obtener_identidad(event)
     
-    if "Admin" not in roles:
+    if "Administradoristrador" not in roles:
         return {
             "statusCode": 403,
             "body": json.dumps({"error": "Acceso denegado"}),
@@ -53,7 +53,7 @@ def listar_productos(event, context):
 
 def actualizar_stock(event, context):
     roles, _ = obtener_identidad(event)
-    if "Admin" not in roles:
+    if "Administrador" not in roles:
         return {
             "statusCode": 403,
             "body": json.dumps({"error": "Acceso denegado"}),
@@ -110,7 +110,7 @@ def actualizar_stock(event, context):
 def actualizar_producto(event, context):
     roles, _ = obtener_identidad(event)
     
-    if "Admin" not in roles:
+    if "Administrador" not in roles:
         return {
             "statusCode": 403,
             "body": json.dumps({"error": "Acceso denegado"}),
@@ -164,7 +164,7 @@ def actualizar_producto(event, context):
 def eliminar_producto(event, context):
     roles, _ = obtener_identidad(event)
     
-    if "Admin" not in roles:
+    if "Administrador" not in roles:
         return {
             "statusCode": 403,
             "body": json.dumps({"error": "Acceso denegado"}),

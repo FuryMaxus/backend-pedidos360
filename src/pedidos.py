@@ -59,7 +59,7 @@ def crear_pedido(event, context):
 def listar_pedidos(event, context):
     roles, user_id = obtener_identidad(event)
     
-    if not roles or ("Cliente" not in roles and "Operador" not in roles and "Admin" not in roles):
+    if not roles or ("Cliente" not in roles and "Operador" not in roles and "Administradoristrador" not in roles):
         return {
             "statusCode": 403,
             "body": json.dumps({"error": "Acceso denegado"}),
@@ -69,7 +69,7 @@ def listar_pedidos(event, context):
     query_params = event.get("queryStringParameters") or {}
     filtro_cliente = query_params.get("cliente_id")
 
-    if "Cliente" in roles and "Operador" not in roles and "Admin" not in roles:
+    if "Cliente" in roles and "Operador" not in roles and "Administradoristrador" not in roles:
         filtro_cliente = user_id
 
     try:
@@ -112,7 +112,7 @@ def obtener_pedido(event, context):
             "headers": CORS_HEADERS
             }
         
-    if "Cliente" in roles and "Admin" not in roles and "Operador" not in roles:
+    if "Cliente" in roles and "Administradoristrador" not in roles and "Operador" not in roles:
         if pedido.get("cliente_id") != user_id:
             return {
                 "statusCode": 403,
@@ -130,7 +130,7 @@ def obtener_pedido(event, context):
 def actualizar_estado(event, context):
     roles, _ = obtener_identidad(event)
     
-    if "Operador" not in roles and "Admin" not in roles:
+    if "Operador" not in roles and "Administradoristrador" not in roles:
         return {
             "statusCode": 403,
             "body": json.dumps({"error": "Acceso denegado"}),
