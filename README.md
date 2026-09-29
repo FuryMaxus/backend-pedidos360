@@ -83,7 +83,7 @@ Para que el backend aplique correctamente las reglas de negocio, el administrado
 
 *   **Cliente**: Dueño de su información. Puede crear pedidos y consultar exclusivamente su propio historial.
 *   **Operador**: Encargado de logística y atención. Puede listar la cola global de pedidos, crear nuevos pedidos (simulando atención en caja) y avanzar la máquina de estados de los pedidos en curso. No tiene permisos de escritura sobre el catálogo.
-*   **Admin**: Dueño del negocio. Tiene control exclusivo y total sobre el CRUD del catálogo (crear, editar, eliminar productos y realizar ajustes manuales de stock). De acuerdo con el flujo de negocio, el administrador no crea pedidos operativamente.
+*   **Administrador**:Tiene control exclusivo y total sobre el CRUD del catálogo (crear, editar, eliminar productos y realizar ajustes manuales de stock). De acuerdo con el flujo de negocio, el administrador no crea pedidos operativamente.
 
 **Excepción de Acceso:** 
 La ruta `GET /api/catalog` (listar productos) es de acceso público. No requiere token ni rol, permitiendo que cualquier usuario no autenticado pueda visualizar el menú disponible. 
