@@ -1,5 +1,5 @@
 service: backend-pedidos360
-
+useDotenv: true
 provider:
   name: aws
   runtime: python3.13
@@ -10,72 +10,89 @@ provider:
     TABLA_CATALOGO: catalogo-tabla-dev
     ESTADOS_PERMITIDOS: "CREADO,ACEPTADO,EN_PREPARACION,DESPACHADO,ENTREGADO,CANCELADO"
     TOPIC_ARN_SNS: arn:aws:sns:${aws:region}:${aws:accountId}:pedido-aceptado
+  httpApi:
+    cors: true
+    authorizers:
+      entraIdAuthorizer:
+        type: jwt
+        identitySource: $request.header.Authorization
+        issuerUrl: https://login.microsoftonline.com/${env:ENTRA_TENANT_ID}/v2.0
+        audience:
+          - ${env:ENTRA_CLIENT_ID}
+
 
 functions:
   crearPedido:
     handler: src.pedidos.crear_pedido
     events:
-      - http:
+      - httpApi:
           path: /api/orders
           method: post
-          cors: true
+          authorizer: 
+            name: entraIdAuthorizer
   listarPedidos:
     handler: src.pedidos.listar_pedidos
     events:
-      - http:
+      - httpApi:
           path: /api/orders
           method: get
-          cors: true
+          authorizer: 
+            name: entraIdAuthorizer
   obtenerPedido:
     handler: src.pedidos.obtener_pedido
     events:
-      - http:
+      - httpApi:
           path: /api/orders/{id}
           method: get
-          cors: true
+          authorizer: 
+            name: entraIdAuthorizer
   actualizarEstadoPedido:
     handler: src.pedidos.actualizar_estado
     events:
-      - http:
+      - httpApi:
           path: /api/orders/{id}/estado
           method: patch
-          cors: true
+          authorizer: 
+            name: entraIdAuthorizer
 
   crearProducto:
     handler: src.catalogo.crear_producto
     events:
-      - http:
+      - httpApi:
           path: /api/catalog
           method: post
-          cors: true
+          authorizer: 
+            name: entraIdAuthorizer
   listarProductos:
     handler: src.catalogo.listar_productos
     events:
-      - http:
+      - httpApi:
           path: /api/catalog
           method: get
-          cors: true
   actualizarStockProducto:
     handler: src.catalogo.actualizar_stock
     events:
-      - http:
+      - httpApi:
           path: /api/catalog/{id}/stock
           method: patch
-          cors: true
+          authorizer: 
+            name: entraIdAuthorizer
   actualizarProducto:
     handler: src.catalogo.actualizar_producto
     events:
-      - http:
+      - httpApi:
           path: /api/catalog/{id}
           method: patch
-          cors: true 
+          authorizer: 
+            name: entraIdAuthorizer
   eliminarProducto:
     handler: src.catalogo.eliminar_producto
     events:
-      - http:
+      - httpApi:
           path: /api/catalog/{id}
           method: delete
-          cors: true
+          authorizer: 
+            name: entraIdAuthorizer
   
   descontarStockEvento:
     handler: src.catalogo.descontar_stock_evento

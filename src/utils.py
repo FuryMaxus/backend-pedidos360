@@ -10,13 +10,8 @@ def obtener_identidad(event):
     """Extrae los roles y el ID de usuario desde el JWT o Headers de prueba"""
     claims = event.get("requestContext", {}).get("authorizer", {}).get("jwt", {}).get("claims", {})
     roles = claims.get("roles", [])
-    user_id = claims.get("sub", "id_desconocido")
+    user_id = claims.get("oid") or claims.get("sub", "id_desconocido")
     
-    if not roles:
-        headers = event.get("headers", {})
-        roles = [headers.get("x-simular-rol", "")]
-        user_id = headers.get("x-simular-usuario", "anonimo")
-        
     return roles, user_id
 
 class DecimalEncoder(json.JSONEncoder):
