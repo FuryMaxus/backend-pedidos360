@@ -11,7 +11,7 @@ tabla_catalogo = dynamodb.Table(os.environ.get('TABLA_CATALOGO'))
 def crear_producto(event, context):
     roles, _ = obtener_identidad(event)
     
-    if "Administradoristrador" not in roles:
+    if "Administrador" not in roles:
         return {
             "statusCode": 403,
             "body": json.dumps({"error": "Acceso denegado"}),
