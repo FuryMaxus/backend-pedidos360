@@ -30,6 +30,8 @@ functions:
           method: post
           authorizer: 
             name: entraIdAuthorizer
+            scopes:
+              - orders.write
   listarPedidos:
     handler: src.pedidos.listar_pedidos
     events:
@@ -38,6 +40,8 @@ functions:
           method: get
           authorizer: 
             name: entraIdAuthorizer
+            scopes:
+              - orders.read
   obtenerPedido:
     handler: src.pedidos.obtener_pedido
     events:
@@ -46,6 +50,8 @@ functions:
           method: get
           authorizer: 
             name: entraIdAuthorizer
+            scopes:
+              - orders.read
   actualizarEstadoPedido:
     handler: src.pedidos.actualizar_estado
     events:
@@ -54,6 +60,8 @@ functions:
           method: patch
           authorizer: 
             name: entraIdAuthorizer
+            scopes:
+              - orders.write
 
   crearProducto:
     handler: src.catalogo.crear_producto
@@ -63,6 +71,8 @@ functions:
           method: post
           authorizer: 
             name: entraIdAuthorizer
+            scopes:
+              - catalog.write
   listarProductos:
     handler: src.catalogo.listar_productos
     events:
@@ -77,6 +87,8 @@ functions:
           method: patch
           authorizer: 
             name: entraIdAuthorizer
+            scopes:
+              - catalog.write
   actualizarProducto:
     handler: src.catalogo.actualizar_producto
     events:
@@ -85,6 +97,8 @@ functions:
           method: patch
           authorizer: 
             name: entraIdAuthorizer
+            scopes:
+              - catalog.write
   eliminarProducto:
     handler: src.catalogo.eliminar_producto
     events:
@@ -93,6 +107,8 @@ functions:
           method: delete
           authorizer: 
             name: entraIdAuthorizer
+            scopes:
+              - catalog.write 
   
   descontarStockEvento:
     handler: src.catalogo.descontar_stock_evento
