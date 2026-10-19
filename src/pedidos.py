@@ -20,6 +20,33 @@ TRANSICIONES_PERMITIDAS = {
     "CANCELADO": []  
 }
 
+def publicar_evento(pedido_id, tipo_evento, payload_extra=None, simular_error=False):
+
+    topic_arn = os.environ.get('TOPIC_ARN_EVENTOS')
+    
+    mensaje = {
+        "type": tipo_evento,
+        "eventId": str(uuid.uuid4()),
+        "timestamp": datetime.now().isoformat(),
+        "pedidoId": pedido_id,
+        "simularError": simular_error
+    }
+    
+    if payload_extra:
+        mensaje.update(payload_extra)
+        
+    sns.publish(
+        TopicArn=topic_arn,
+        Message=json.dumps(mensaje, cls=DecimalEncoder),
+        MessageAttributes={
+            'tipo_evento': {
+                'DataType': 'String',
+                'StringValue': tipo_evento
+            }
+        }
+    )
+    print(f"Evento {tipo_evento} publicado con éxito en SNS")
+
 def crear_pedido(event, context):
     roles, user_id = obtener_identidad(event)
     
@@ -207,25 +234,28 @@ def actualizar_estado(event, context):
 
     pedido["estado"] = nuevo_estado    
 
-    if nuevo_estado == "ACEPTADO":
-        try:
-            sns.publish(
-                TopicArn=os.environ['TOPIC_ARN_SNS'],
-                Message=json.dumps({
-                    "items_vendidos": pedido["items"] 
-                }, cls=DecimalEncoder)
+   
+    try:
+        if nuevo_estado == "ACEPTADO":
+            publicar_evento(
+                pedido_id=pedido_id, 
+                tipo_evento="PedidoAceptado", 
+                payload_extra={"items_vendidos": pedido["items"]}
             )
-            print("Evento publicado en SNS exitosamente")
-            
-        except Exception as e:
-            print(f"Error crítico en SNS. Iniciando Rollback: {str(e)}")
-            
+        elif nuevo_estado == "DESPACHADO":
+            publicar_evento(
+                pedido_id=pedido_id, 
+                tipo_evento="PedidoDespachado"
+            )
+        
+    except Exception as e:
+        print(f"Error crítico en SNS. Iniciando Rollback: {str(e)}")
+        if nuevo_estado == "ACEPTADO":
             tabla_pedidos.update_item(
                 Key={"id": pedido_id},
                 UpdateExpression="SET estado = :estado",
                 ExpressionAttributeValues={":estado": "CANCELADO"}
             )
-            
             return {
                 "statusCode": 500,
                 "body": json.dumps({

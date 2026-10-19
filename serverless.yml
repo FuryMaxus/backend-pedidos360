@@ -9,7 +9,11 @@ provider:
     TABLA_PEDIDOS: pedidos-tabla-dev
     TABLA_CATALOGO: catalogo-tabla-dev
     ESTADOS_PERMITIDOS: "CREADO,ACEPTADO,EN_PREPARACION,DESPACHADO,ENTREGADO,CANCELADO"
-    TOPIC_ARN_SNS: arn:aws:sns:${aws:region}:${aws:accountId}:pedido-aceptado
+    TOPIC_ARN_EVENTOS: !Ref PedidosTopic
+    DLQ_EMAIL_URL: !Ref EmailDLQ
+    DLQ_KITCHEN_URL: !Ref KitchenDLQ
+    DLQ_INVOICE_URL: !Ref InvoiceDLQ
+    DLQ_STOCK_URL: !Ref StockDLQ
   httpApi:
     cors: true
     authorizers:
@@ -110,10 +114,37 @@ functions:
             scopes:
               - catalog.write 
   
+
+
+  notificar-email:
+    handler: src.notificaciones.enviar_email
+    events:
+      - sqs:
+          arn: !GetAtt EmailQueue.Arn
+          batchSize: 1
+          functionResponseType: ReportBatchItemFailures
+  ticket-cocina:
+    handler: src.notificaciones.imprimir_ticket
+    events:
+      - sqs:
+          arn: !GetAtt KitchenQueue.Arn
+          batchSize: 1
+          functionResponseType: ReportBatchItemFailures
+  generar-boleta:
+    handler: src.notificaciones.generar_boleta
+    events:
+      - sqs:
+          arn: !GetAtt InvoiceQueue.Arn
+          batchSize: 1
+          functionResponseType: ReportBatchItemFailures
   descontarStockEvento:
     handler: src.catalogo.descontar_stock_evento
     events:
-      - sns: pedido-aceptado
+      - sqs:
+          arn: !GetAtt StockQueue.Arn
+          batchSize: 1
+          functionResponseType: ReportBatchItemFailures
+  
 
 resources:
   Resources:
@@ -140,3 +171,111 @@ resources:
           - AttributeName: id
             KeyType: HASH
         BillingMode: PAY_PER_REQUEST
+
+    PedidosTopic:
+      Type: AWS::SNS::Topic
+      Properties:
+        TopicName: pedidos360-eventos
+    
+    EmailDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: q-email-dlq
+    KitchenDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: q-kitchen-dlq
+    InvoiceDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: q-invoice-dlq
+    StockDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: q-stock-dlq
+    
+    EmailQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: q-email
+        VisibilityTimeout: 30
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt EmailDLQ.Arn
+          maxReceiveCount: 3
+    KitchenQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: q-kitchen
+        VisibilityTimeout: 30
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt KitchenDLQ.Arn
+          maxReceiveCount: 3
+    InvoiceQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: q-invoice
+        VisibilityTimeout: 30
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt InvoiceDLQ.Arn
+          maxReceiveCount: 3
+    StockQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: q-stock
+        VisibilityTimeout: 30
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt StockDLQ.Arn
+          maxReceiveCount: 3
+    
+    EmailSubscription:
+      Type: AWS::SNS::Subscription
+      Properties:
+        Protocol: sqs
+        Endpoint: !GetAtt EmailQueue.Arn
+        TopicArn: !Ref PedidosTopic
+        RawMessageDelivery: true
+    KitchenSubscription:
+      Type: AWS::SNS::Subscription
+      Properties:
+        Protocol: sqs
+        Endpoint: !GetAtt KitchenQueue.Arn
+        TopicArn: !Ref PedidosTopic
+        RawMessageDelivery: true
+        FilterPolicy:
+          tipo_evento: ["PedidoAceptado"]
+    InvoiceSubscription:
+      Type: AWS::SNS::Subscription
+      Properties:
+        Protocol: sqs
+        Endpoint: !GetAtt InvoiceQueue.Arn
+        TopicArn: !Ref PedidosTopic
+        RawMessageDelivery: true
+        FilterPolicy:
+          tipo_evento: ["PedidoDespachado"]
+    StockSubscription:
+      Type: AWS::SNS::Subscription
+      Properties:
+        Protocol: sqs
+        Endpoint: !GetAtt StockQueue.Arn
+        TopicArn: !Ref PedidosTopic
+        RawMessageDelivery: true
+        FilterPolicy:
+          tipo_evento: ["PedidoAceptado"]
+    
+    SqsSnsPolicy:
+      Type: AWS::SQS::QueuePolicy
+      Properties:
+        Queues:
+          - !Ref EmailQueue
+          - !Ref KitchenQueue
+          - !Ref InvoiceQueue
+          - !Ref StockQueue
+        PolicyDocument:
+          Statement:
+            - Effect: Allow
+              Principal: "*"
+              Action: sqs:SendMessage
+              Resource: "*"
+              Condition:
+                ArnEquals:
+                  aws:SourceArn: !Ref PedidosTopic

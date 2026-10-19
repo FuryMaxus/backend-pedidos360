@@ -5,8 +5,11 @@ import boto3
 from src.utils import CORS_HEADERS, DecimalEncoder, obtener_identidad
 
 dynamodb = boto3.resource('dynamodb')
+sqs_client = boto3.client('sqs')
 tabla_catalogo = dynamodb.Table(os.environ.get('TABLA_CATALOGO'))
 
+class ErrorNoRecuperable(Exception):
+    pass
 
 def crear_producto(event, context):
     roles, _ = obtener_identidad(event)
@@ -190,21 +193,52 @@ def eliminar_producto(event, context):
         }
 
 def descontar_stock_evento(event, context):
-    """Esta función no tiene return HTTP porque no le responde a un navegador, le responde a AWS"""
-    try:
-        mensaje_sns = event['Records'][0]['Sns']['Message']
-        datos = json.loads(mensaje_sns)
-        items_vendidos = datos.get("items_vendidos", [])
+    """
+    Consumidor asíncrono para SQS.
+    Maneja confirmación de mensajes y envío a DLQ para errores no recuperables.
+    """
+    batch_item_failures = []
+    dlq_url = os.environ.get('DLQ_STOCK_URL')
+    
+    for record in event.get('Records', []):
+        message_id = record['messageId']
+        intentos = record.get('attributes', {}).get('ApproximateReceiveCount', 1)
         
-        for item in items_vendidos:
-            producto_id = item.get("producto_id")
-            cantidad = item.get("cantidad")
-            tabla_catalogo.update_item(
-                Key={"id": producto_id},
-                UpdateExpression="ADD stock :val",
-                ExpressionAttributeValues={":val": -cantidad}
-            )
-            print(f"Stock descontado: -{cantidad} para el producto {producto_id}")
+        try:
+            msg = json.loads(record['body'])
+            print(f"Procesando evento de stock. Intento n° {intentos}: {msg}")
             
-    except Exception as e:
-        print(f"Error procesando evento SNS: {str(e)}")
+            items_vendidos = msg.get("items_vendidos")
+            pedido_id = msg.get("pedidoId")
+            
+            if not items_vendidos or not pedido_id:
+                raise ErrorNoRecuperable("Mensaje inválido: Falta 'pedidoId' o 'items_vendidos'.")
+            
+            for item in items_vendidos:
+                producto_id = item.get("producto_id")
+                cantidad = item.get("cantidad")
+                
+                if not producto_id or not cantidad:
+                    raise ErrorNoRecuperable(f"El item no tiene producto_id o cantidad válida: {item}")
+                
+                tabla_catalogo.update_item(
+                    Key={"id": producto_id},
+                    UpdateExpression="ADD stock :val",
+                    ExpressionAttributeValues={":val": -int(cantidad)}
+                )
+                print(f"Stock descontado: -{cantidad} para el producto {producto_id} del pedido {pedido_id}")
+            
+            
+        except ErrorNoRecuperable as e:
+            print(f"Error NO recuperable. Enviando mensaje {message_id} a DLQ: {str(e)}")
+            if dlq_url:
+                sqs_client.send_message(
+                    QueueUrl=dlq_url,
+                    MessageBody=record['body']
+                )
+            
+        except Exception as e:
+            print(f"Error recuperable (ej. DynamoDB bloqueado). Reintentando mensaje {message_id}: {str(e)}")
+            batch_item_failures.append({"itemIdentifier": message_id})
+            
+    return {"batchItemFailures": batch_item_failures}
